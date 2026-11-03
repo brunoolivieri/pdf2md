@@ -12,8 +12,8 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F1.1 | Models + Strategy Protocol | F0.1 | concluído | Claude Code | 2026-11-03 |
 | F1.2 | Naming (título, slug, colisão) | F0.2 | concluído | Claude Code | 2026-11-03 |
 | F1.3 | Writer + contagem de tokens | F1.1 | concluído | Claude Code | 2026-11-03 |
-| F2.1 | Estratégia A — pymupdf4llm | F1.2, F1.3 | pendente | | |
-| F2.2 | Estratégia B — docling | F1.2, F1.3 | pendente | | |
+| F2.1 | Estratégia A — pymupdf4llm | F1.2, F1.3 | concluído | Claude Code | 2026-11-03 |
+| F2.2 | Estratégia B — docling | F1.2, F1.3 | concluído | Claude Code | 2026-11-03 |
 | F3.1 | Pós-processamento para LLM | F2.1 | pendente | | |
 | F3.2 | Cache por sha256 | F1.3 | pendente | | |
 | F4.1 | Normalização + métricas de similaridade | F1.1 | pendente | | |
@@ -49,3 +49,9 @@ Entradas mais recentes no fim.
 - Feito: `models.py`, `strategies/base.py` + registro `get_strategy`, `naming.py` (título/slug/colisão/sha256), `writer.py`, `tokens.py`.
 - Verificação: testes `test_models`, `test_naming`, `test_writer` passando.
 - Decisões: contagem de tabelas/imagens/títulos é feita sobre o markdown final (`writer.count_structure`), igual para as duas estratégias. `tiktoken` baixa o encoding no 1º uso; sem rede, cai para estimativa chars/4 (registrado em `tokens_method`).
+
+### 2026-11-03 — F2.1, F2.2 — Claude Code
+- Feito: `strategies/pymupdf_strategy.py` e `strategies/docling_strategy.py`; `tests/test_strategies.py` parametrizado nas duas.
+- Verificação: `pytest` 23 passed (docling incluído, ~40 s com modelos em cache).
+- Decisões: **pymupdf4llm em modo legado** (`use_layout(False)`): o modo layout importa `onnxruntime`, que dá segfault neste ambiente, e o modo legado mantém a estratégia A puramente heurística. Docling: `save_as_markdown` com `artifacts_dir=Path("images")` relativo gera links `images/...`.
+- Atenção próximo agente: saída da A traz cabeçalho/rodapé repetidos, linhas quebradas e às vezes funde a última linha do parágrafo na tabela (`|tokens.|Col2|Col3|`); docling usa tabelas com padding e nomes de imagem com hash. Docling baixa modelos do HuggingFace no 1º uso.
