@@ -9,7 +9,7 @@ from typing import Any
 import pymupdf
 import pymupdf4llm
 
-from pdf2md.models import ConversionResult
+from pdf2md.models import PAGE_BREAK, ConversionResult
 
 # O modo "layout" do pymupdf4llm >= 1.x depende de onnxruntime, que trava (segfault) em
 # alguns ambientes Windows/Anaconda; além disso queremos uma estratégia puramente
@@ -36,16 +36,18 @@ class PyMuPDFStrategy:
     def convert(self, pdf: Path, images_dir: Path) -> ConversionResult:
         images_dir.mkdir(parents=True, exist_ok=True)
         with pymupdf.open(pdf) as doc:
-            markdown = pymupdf4llm.to_markdown(
+            chunks = pymupdf4llm.to_markdown(
                 doc,
                 write_images=True,
                 image_path=str(images_dir),
                 image_format="png",
                 dpi=self.dpi,
                 table_strategy=self.table_strategy,
+                page_chunks=True,
                 show_progress=False,
             )
             pages = doc.page_count
+        markdown = f"\n\n{PAGE_BREAK}\n\n".join(chunk["text"] for chunk in chunks)
         return ConversionResult(
             markdown=_relative_image_links(markdown), pages=pages, images_dir=images_dir
         )

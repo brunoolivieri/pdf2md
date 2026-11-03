@@ -43,7 +43,7 @@ def convert_one(
 
     start = time.perf_counter()
     result = strategy.convert(pdf, images_dir)
-    markdown = postprocess(result.markdown, images_dir, result.pages)
+    markdown = postprocess(result.markdown, images_dir)
     seconds = round(time.perf_counter() - start, 3)
 
     structure = count_structure(markdown)

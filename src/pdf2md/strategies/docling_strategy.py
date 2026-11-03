@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import os
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
-from pdf2md.models import ConversionResult
+from pdf2md.models import PAGE_BREAK, ConversionResult
 
 RAW_MD = "_docling_raw.md"
+
+# Windows sem modo desenvolvedor não cria symlinks no cache do HuggingFace: só um aviso ruidoso.
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 
 class DoclingStrategy:
@@ -51,7 +55,10 @@ class DoclingStrategy:
         # e escreve links relativos `images/<arquivo>` no markdown.
         raw = images_dir.parent / RAW_MD
         doc.save_as_markdown(
-            raw, artifacts_dir=Path(images_dir.name), image_mode=ImageRefMode.REFERENCED
+            raw,
+            artifacts_dir=Path(images_dir.name),
+            image_mode=ImageRefMode.REFERENCED,
+            page_break_placeholder=PAGE_BREAK,
         )
         markdown = raw.read_text(encoding="utf-8")
         raw.unlink()

@@ -6,13 +6,17 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
+# Marcador de quebra de página que as estratégias inserem no markdown bruto; o
+# pós-processamento usa as páginas para achar cabeçalhos/rodapés e depois o remove.
+PAGE_BREAK = "<!-- pdf2md:page-break -->"
+
 
 @dataclass
 class ConversionResult:
     """Saída bruta de uma estratégia, antes do pós-processamento.
 
     As imagens já foram gravadas pela estratégia em `images_dir`, e o markdown as
-    referencia por caminho relativo `images/<arquivo>`.
+    referencia por caminho relativo `images/<arquivo>`. Páginas são separadas por `PAGE_BREAK`.
     """
 
     markdown: str

@@ -18,8 +18,8 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F3.2 | Cache por sha256 | F1.3 | concluído | Claude Code | 2026-11-03 |
 | F4.1 | Normalização + métricas de similaridade | F1.1 | concluído | Claude Code | 2026-11-03 |
 | F4.2 | Relatórios de comparação (MD/JSON/CSV) | F4.1 | concluído | Claude Code | 2026-11-03 |
-| F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | pendente | | |
-| F5.2 | Teste end-to-end | F5.1 | pendente | | |
+| F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | concluído | Claude Code | 2026-11-03 |
+| F5.2 | Teste end-to-end | F5.1 | concluído | Claude Code | 2026-11-03 |
 | F6.1 | README final | F5.2 | pendente | | |
 | F6.2 | Avaliação em PDFs reais | F5.2 | pendente | | |
 
@@ -65,3 +65,9 @@ Entradas mais recentes no fim.
 - Feito: `compare/normalize.py`, `compare/metrics.py` (ratio, token_set, jaccard_3gram, paragraph_diff, score ponderado, nível, divergências), `compare/report.py` (`compare_folders`, relatório MD/JSON, `resumo.csv` recriado a partir dos JSON).
 - Verificação: `pytest -m "not docling"` 35 passed.
 - Decisões: `line_diff` do PLAN virou `paragraph_diff` (SequenceMatcher sobre parágrafos já normalizados; linhas físicas variam muito entre estratégias). Divergências = parágrafos de A sem correspondência aproximada (`partial_ratio` < 80) em B. CSV com BOM para abrir direto no Excel.
+
+### 2026-11-03 — F5.1, F5.2 (+ correção em F3.1) — Claude Code
+- Feito: `cli.py` com `convert` (arquivo ou pasta recursiva, `--strategies`, `--ocr`, `--force`, `--workers`, `--compare/--no-compare`, tabelas `rich`, exit 1 se algum PDF falhar) e `compare`. `tests/test_cli.py` com e2e nas duas estratégias.
+- Correção F3.1: a 1ª execução real mostrou score 47 (Baixa) em `misto.pdf` — a remoção de cabeçalho/rodapé por repetição no documento inteiro apagava parágrafos repetidos e títulos "Seção N". Agora as estratégias inserem `PAGE_BREAK` (`page_chunks=True` no pymupdf4llm, `page_break_placeholder` no docling) e só as 2 primeiras/últimas linhas de cada página, repetidas em ≥ 75% das páginas, são removidas (títulos/tabelas/imagens nunca). Score passou a 95.7.
+- Verificação: `pytest` 45 passed (~50 s com docling); `pdf2md convert tests/fixtures -o output` OK.
+- Atenção próximo agente: diferença residual em `manual-tecnico-acme` é real — pymupdf4llm move a última linha do parágrafo para dentro da tabela (`|tokens.|Col2|Col3|`).

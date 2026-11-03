@@ -10,8 +10,12 @@ from pathlib import Path
 
 import pymupdf
 
+from pdf2md.models import PAGE_BREAK
+
 MIN_IMAGE_PX = 32
 MAX_HEADER_LEN = 120
+EDGE_LINES = 2
+REPEAT_RATIO = 0.75
 
 BASE64_IMAGE = re.compile(r"!\[[^\]]*\]\(data:image/[^)]*\)")
 IMAGE_LINK = re.compile(r"!\[([^\]]*)\]\((images/[^)\s]+)\)")
@@ -112,24 +116,42 @@ def _header_key(line: str) -> str:
     return key
 
 
-def remove_page_artifacts(lines: list[str], pages: int) -> list[str]:
-    """Remove números de página e linhas que se repetem em boa parte das páginas."""
-    candidates = Counter(
-        _header_key(line)
-        for line in lines
-        if line.strip() and not _is_table(line) and len(line) <= MAX_HEADER_LEN
-    )
-    threshold = max(3, math.ceil(pages * 0.5))
-    repeated = {k for k, n in candidates.items() if n >= threshold and k} if pages >= 2 else set()
+def _edge_indexes(lines: list[str]) -> set[int]:
+    """Índices das primeiras e últimas linhas não vazias da página (onde ficam cabeçalho/rodapé)."""
+    filled = [i for i, line in enumerate(lines) if line.strip()]
+    return set(filled[:EDGE_LINES] + filled[-EDGE_LINES:])
+
+
+def _removable(line: str) -> bool:
+    """Títulos, tabelas e imagens nunca são tratados como cabeçalho/rodapé."""
+    s = line.strip()
+    return bool(s) and len(s) <= MAX_HEADER_LEN and not s.startswith(("#", "|", "!["))
+
+
+def remove_page_artifacts(pages: list[str]) -> list[str]:
+    """Remove números de página e cabeçalhos/rodapés das bordas de cada página.
+
+    Uma linha de borda é cabeçalho/rodapé se (com dígitos ignorados, ver `_header_key`) ela
+    aparece na borda de pelo menos 75% das páginas.
+    """
+    split = [page.split("\n") for page in pages]
+    edges = [_edge_indexes(lines) for lines in split]
+    counts: Counter[str] = Counter()
+    for lines, idx in zip(split, edges, strict=True):
+        counts.update({_header_key(lines[i]) for i in idx if _removable(lines[i])})
+    threshold = max(2, math.ceil(len(pages) * REPEAT_RATIO))
+    repeated = {k for k, n in counts.items() if n >= threshold and k} if len(pages) >= 2 else set()
+
     out = []
-    for line in lines:
-        if not _is_table(line):
-            bare = _strip_emphasis(line)
-            if bare and PAGE_NUMBER.match(bare):
-                continue
-            if line.strip() and _header_key(line) in repeated:
-                continue
-        out.append(line)
+    for lines, idx in zip(split, edges, strict=True):
+        kept = []
+        for i, line in enumerate(lines):
+            if i in idx and _removable(line):
+                bare = _strip_emphasis(line)
+                if PAGE_NUMBER.match(bare) or _header_key(line) in repeated:
+                    continue
+            kept.append(line)
+        out.append("\n".join(kept))
     return out
 
 
@@ -171,9 +193,24 @@ def _squeeze(line: str) -> str:
     return re.sub(r"[ \t]+", " ", line).rstrip()
 
 
-def _clean_prose(lines: list[str], pages: int) -> list[str]:
+def join_pages(pages: list[str]) -> str:
+    """Junta as páginas; se a anterior termina no meio de uma frase, o parágrafo continua."""
+    text = ""
+    for page in (p.strip("\n") for p in pages):
+        if not page.strip():
+            continue
+        if not text:
+            text = page
+            continue
+        last = text.rstrip().rsplit("\n", 1)[-1]
+        continues = _is_plain(last) and not last.rstrip().endswith((".", "!", "?", ":"))
+        text = text.rstrip() + ("\n" if continues else "\n\n") + page.lstrip("\n")
+    return text
+
+
+def _clean_prose(lines: list[str]) -> list[str]:
     normalized = []
-    for line in remove_page_artifacts(lines, pages):
+    for line in lines:
         m = HEADING_BOLD.match(line.strip())
         if m:
             line = f"{m.group(1)} {m.group(2).strip()}"
@@ -182,14 +219,14 @@ def _clean_prose(lines: list[str], pages: int) -> list[str]:
     return reflow(normalized)
 
 
-def clean_text(markdown: str, pages: int) -> str:
+def clean_text(markdown: str) -> str:
     """Limpa o texto fora de blocos de código; blocos ``` são preservados intactos."""
     out: list[str] = []
     prose: list[str] = []
     in_code = False
     for line in markdown.replace("\r\n", "\n").split("\n"):
         if _is_fence(line) and not in_code:
-            out.extend(_clean_prose(prose, pages))
+            out.extend(_clean_prose(prose))
             prose = []
             in_code = True
             out.append(line)
@@ -198,13 +235,18 @@ def clean_text(markdown: str, pages: int) -> str:
             in_code = not _is_fence(line)
         else:
             prose.append(line)
-    out.extend(_clean_prose(prose, pages))
+    out.extend(_clean_prose(prose))
 
     text = "\n".join(out)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     return text + "\n"
 
 
-def postprocess(markdown: str, images_dir: Path, pages: int) -> str:
-    """Aplica todas as regras; altera arquivos em `images_dir` (remove/renomeia)."""
-    return clean_text(process_images(markdown, images_dir), pages)
+def postprocess(markdown: str, images_dir: Path) -> str:
+    """Aplica todas as regras; altera arquivos em `images_dir` (remove/renomeia).
+
+    As estratégias separam páginas com `PAGE_BREAK`; o marcador não chega à saída final.
+    """
+    markdown = process_images(markdown.replace("\r\n", "\n"), images_dir)
+    pages = remove_page_artifacts(markdown.split(PAGE_BREAK))
+    return clean_text(join_pages(pages))
