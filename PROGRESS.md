@@ -25,7 +25,9 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 
 ## Pendências / ideias fora de escopo
 
-- (vazio)
+- F6.2 precisa de PDFs reais em `samples/` (o repositório não traz nenhum). A rodada com fixtures já está em `docs/avaliacao.md`.
+- Testar se uma versão mais antiga do `onnxruntime` permite reativar o modo layout do pymupdf4llm (talvez como 3ª estratégia `pymupdf-layout`).
+- Silenciar o `DeprecationWarning` de `force_full_page_ocr` que o docling/pydantic emite nos testes.
 
 ## Log de handoff
 
