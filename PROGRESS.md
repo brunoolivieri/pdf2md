@@ -16,8 +16,8 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F2.2 | Estratégia B — docling | F1.2, F1.3 | concluído | Claude Code | 2026-11-03 |
 | F3.1 | Pós-processamento para LLM | F2.1 | concluído | Claude Code | 2026-11-03 |
 | F3.2 | Cache por sha256 | F1.3 | concluído | Claude Code | 2026-11-03 |
-| F4.1 | Normalização + métricas de similaridade | F1.1 | pendente | | |
-| F4.2 | Relatórios de comparação (MD/JSON/CSV) | F4.1 | pendente | | |
+| F4.1 | Normalização + métricas de similaridade | F1.1 | concluído | Claude Code | 2026-11-03 |
+| F4.2 | Relatórios de comparação (MD/JSON/CSV) | F4.1 | concluído | Claude Code | 2026-11-03 |
 | F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | pendente | | |
 | F5.2 | Teste end-to-end | F5.1 | pendente | | |
 | F6.1 | README final | F5.2 | pendente | | |
@@ -60,3 +60,8 @@ Entradas mais recentes no fim.
 - Feito: `postprocess.py` (base64, imagens minúsculas/duplicadas/órfãs, renomeia `img-NNN`, números de página, cabeçalho/rodapé repetidos, negrito em títulos/células, tabelas compactas, reflow de parágrafos com des-hifenização, colapso de espaços; blocos ``` intactos) e `pipeline.py` (`convert_one` com cache por sha256 e gravação atômica via pasta `.tmp`).
 - Verificação: `pytest -m "not docling"` 28 passed.
 - Decisões: novo módulo `pipeline.py` (não previsto no PLAN) concentra cache+conversão+gravação, para a CLI ficar fina. Repetição de cabeçalho exige ≥ max(3, 50% das páginas); dígitos só são ignorados em linhas curtas sem pontuação final (evita apagar frases do corpo).
+
+### 2026-11-03 — F4.1, F4.2 — Claude Code
+- Feito: `compare/normalize.py`, `compare/metrics.py` (ratio, token_set, jaccard_3gram, paragraph_diff, score ponderado, nível, divergências), `compare/report.py` (`compare_folders`, relatório MD/JSON, `resumo.csv` recriado a partir dos JSON).
+- Verificação: `pytest -m "not docling"` 35 passed.
+- Decisões: `line_diff` do PLAN virou `paragraph_diff` (SequenceMatcher sobre parágrafos já normalizados; linhas físicas variam muito entre estratégias). Divergências = parágrafos de A sem correspondência aproximada (`partial_ratio` < 80) em B. CSV com BOM para abrir direto no Excel.
