@@ -14,8 +14,8 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F1.3 | Writer + contagem de tokens | F1.1 | concluído | Claude Code | 2026-11-03 |
 | F2.1 | Estratégia A — pymupdf4llm | F1.2, F1.3 | concluído | Claude Code | 2026-11-03 |
 | F2.2 | Estratégia B — docling | F1.2, F1.3 | concluído | Claude Code | 2026-11-03 |
-| F3.1 | Pós-processamento para LLM | F2.1 | pendente | | |
-| F3.2 | Cache por sha256 | F1.3 | pendente | | |
+| F3.1 | Pós-processamento para LLM | F2.1 | concluído | Claude Code | 2026-11-03 |
+| F3.2 | Cache por sha256 | F1.3 | concluído | Claude Code | 2026-11-03 |
 | F4.1 | Normalização + métricas de similaridade | F1.1 | pendente | | |
 | F4.2 | Relatórios de comparação (MD/JSON/CSV) | F4.1 | pendente | | |
 | F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | pendente | | |
@@ -55,3 +55,8 @@ Entradas mais recentes no fim.
 - Verificação: `pytest` 23 passed (docling incluído, ~40 s com modelos em cache).
 - Decisões: **pymupdf4llm em modo legado** (`use_layout(False)`): o modo layout importa `onnxruntime`, que dá segfault neste ambiente, e o modo legado mantém a estratégia A puramente heurística. Docling: `save_as_markdown` com `artifacts_dir=Path("images")` relativo gera links `images/...`.
 - Atenção próximo agente: saída da A traz cabeçalho/rodapé repetidos, linhas quebradas e às vezes funde a última linha do parágrafo na tabela (`|tokens.|Col2|Col3|`); docling usa tabelas com padding e nomes de imagem com hash. Docling baixa modelos do HuggingFace no 1º uso.
+
+### 2026-11-03 — F3.1, F3.2 — Claude Code
+- Feito: `postprocess.py` (base64, imagens minúsculas/duplicadas/órfãs, renomeia `img-NNN`, números de página, cabeçalho/rodapé repetidos, negrito em títulos/células, tabelas compactas, reflow de parágrafos com des-hifenização, colapso de espaços; blocos ``` intactos) e `pipeline.py` (`convert_one` com cache por sha256 e gravação atômica via pasta `.tmp`).
+- Verificação: `pytest -m "not docling"` 28 passed.
+- Decisões: novo módulo `pipeline.py` (não previsto no PLAN) concentra cache+conversão+gravação, para a CLI ficar fina. Repetição de cabeçalho exige ≥ max(3, 50% das páginas); dígitos só são ignorados em linhas curtas sem pontuação final (evita apagar frases do corpo).
