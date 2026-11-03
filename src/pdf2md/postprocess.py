@@ -6,6 +6,7 @@ import hashlib
 import math
 import re
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 import pymupdf
@@ -13,6 +14,11 @@ import pymupdf
 from pdf2md.models import PAGE_BREAK
 
 MIN_IMAGE_PX = 32
+# Quase-duplicatas. Calibrado num PDF real (SEI, 80 págs, logos + QR codes): cópias do mesmo
+# logo ficaram com diferença média 0–2 (escala 0–255); QR codes distintos, sempre ≥ 10.
+# Hashes perceptuais (dHash) não separam QR codes distintos e foram descartados.
+SIZE_TOLERANCE = 2
+MAX_PIXEL_DIFF = 2.5
 MAX_HEADER_LEN = 120
 EDGE_LINES = 2
 REPEAT_RATIO = 0.75
@@ -55,35 +61,67 @@ def _strip_emphasis(text: str) -> str:
 # --- imagens -------------------------------------------------------------------------------
 
 
-def _image_size(path: Path) -> tuple[int, int]:
+@dataclass(frozen=True)
+class _Gray:
+    """Imagem em tons de cinza na resolução nativa."""
+
+    width: int
+    height: int
+    stride: int
+    samples: bytes
+
+    def same_picture(self, other: _Gray) -> bool:
+        """Mesmo tamanho (±SIZE_TOLERANCE px) e diferença média de pixel ≤ MAX_PIXEL_DIFF.
+
+        Pega a mesma figura gravada com bytes diferentes (recompressão, recorte de 1–2 px), mas
+        nunca confunde figuras distintas, mesmo parecidas (QR codes de assinaturas diferentes).
+        """
+        if abs(self.width - other.width) > SIZE_TOLERANCE:
+            return False
+        if abs(self.height - other.height) > SIZE_TOLERANCE:
+            return False
+        w, h = min(self.width, other.width), min(self.height, other.height)
+        total = 0
+        for y in range(h):
+            a = self.samples[y * self.stride : y * self.stride + w]
+            b = other.samples[y * other.stride : y * other.stride + w]
+            total += sum(abs(x - z) for x, z in zip(a, b, strict=True))
+        return total / (w * h) <= MAX_PIXEL_DIFF
+
+
+def _load_gray(path: Path) -> _Gray | None:
     try:
         pix = pymupdf.Pixmap(str(path))
-        return pix.width, pix.height
+        if pix.alpha:
+            pix = pymupdf.Pixmap(pix, 0)
+        if pix.colorspace is None or pix.colorspace.n != 1:
+            pix = pymupdf.Pixmap(pymupdf.csGRAY, pix)
     except Exception:
-        return (0, 0)
+        return None
+    return _Gray(pix.width, pix.height, pix.stride, bytes(pix.samples))
 
 
 def process_images(markdown: str, images_dir: Path) -> str:
-    """Remove base64, links quebrados, imagens minúsculas e duplicadas; renomeia `img-NNN`."""
+    """Remove base64, links quebrados, imagens minúsculas e quase duplicadas; renomeia `img-NNN`."""
     markdown = BASE64_IMAGE.sub("", markdown)
     folder = images_dir.parent
-    seen: dict[str, str] = {}  # hash do conteúdo -> novo nome
+    seen: set[str] = set()  # sha256 das imagens mantidas
+    kept: list[_Gray] = []
     renames: dict[Path, str] = {}
 
     def replace(m: re.Match[str]) -> str:
         path = folder / m.group(2)
-        if path in renames:  # mesmo arquivo referenciado de novo
+        if path in renames or not path.is_file():  # repetida ou inexistente
             return ""
-        if not path.is_file():
-            return ""
-        w, h = _image_size(path)
-        if w < MIN_IMAGE_PX or h < MIN_IMAGE_PX:
+        img = _load_gray(path)
+        if img is None or img.width < MIN_IMAGE_PX or img.height < MIN_IMAGE_PX:
             return ""
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest in seen:
+        if digest in seen or any(img.same_picture(other) for other in kept):
             return ""
-        new_name = f"img-{len(seen) + 1:03d}{path.suffix.lower()}"
-        seen[digest] = new_name
+        seen.add(digest)
+        kept.append(img)
+        new_name = f"img-{len(kept):03d}{path.suffix.lower()}"
         renames[path] = new_name
         return f"![{m.group(1).strip()}]({images_dir.name}/{new_name})"
 

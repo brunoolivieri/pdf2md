@@ -96,6 +96,40 @@ def test_process_images(tmp_path):
     assert [p.name for p in images.iterdir()] == ["img-001.png"]
 
 
+def _gray_png(path, rows):
+    h, w = len(rows), len(rows[0])
+    data = bytes(v for row in rows for v in row for _ in range(3))
+    pymupdf.Pixmap(pymupdf.csRGB, w, h, data, False).save(str(path))
+
+
+def _qr_like(seed, size=120, module=6):
+    """Padrão tipo QR: cantos fixos iguais e miolo pseudoaleatório que depende de `seed`."""
+    import random
+
+    rng = random.Random(seed)
+    n = size // module
+    cells = [[rng.random() < 0.5 for _ in range(n)] for _ in range(n)]
+    for cy, cx in ((0, 0), (0, n - 7), (n - 7, 0)):
+        for y in range(7):
+            for x in range(7):
+                cells[cy + y][cx + x] = y in (0, 6) or x in (0, 6) or (2 <= y <= 4 and 2 <= x <= 4)
+    return [[0 if cells[y // module][x // module] else 255 for x in range(size)]
+            for y in range(size)]  # fmt: skip
+
+
+def test_process_images_near_duplicates(tmp_path):
+    images = tmp_path / "images"
+    images.mkdir()
+    logo = _qr_like(1)
+    copy = [[max(0, v - 2) for v in row] + [255] for row in logo]  # +1 px e leve ruído
+    _gray_png(images / "logo1.png", logo)
+    _gray_png(images / "logo2.png", copy)
+    _gray_png(images / "outro.png", _qr_like(2))  # mesmos cantos, miolo diferente
+    md = "![](images/logo1.png)\n![](images/logo2.png)\n![](images/outro.png)\n"
+    out = process_images(md, images)
+    assert out.split() == ["![](images/img-001.png)", "![](images/img-002.png)"]
+
+
 def test_misto_without_headers_footers(pdfs, tmp_path):
     meta, cached = convert_one(
         pdfs["misto.pdf"], get_strategy("pymupdf"), tmp_path, "misto", "Misto", "sha"

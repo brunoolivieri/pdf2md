@@ -21,11 +21,13 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | concluído | Claude Code | 2026-11-03 |
 | F5.2 | Teste end-to-end | F5.1 | concluído | Claude Code | 2026-11-03 |
 | F6.1 | README final | F5.2 | concluído | Claude Code | 2026-11-03 |
-| F6.2 | Avaliação em PDFs reais | F5.2 | bloqueado | Claude Code | 2026-11-03 |
+| F6.2 | Avaliação em PDFs reais | F5.2 | concluído | Claude Code | 2026-11-03 |
 
 ## Pendências / ideias fora de escopo
 
-- F6.2 precisa de PDFs reais em `samples/` (o repositório não traz nenhum). A rodada com fixtures já está em `docs/avaliacao.md`.
+- Avaliar mais tipos de PDF: artigo com tabelas mescladas, layout em colunas, escaneado com `--ocr` (ver `docs/avaliacao.md`).
+- Título: metadado `Title` que é só identificador (ex. "PDF 6005449/2026-00" do SEI) poderia perder para o nome do arquivo quando este for mais descritivo.
+- pymupdf4llm não detecta títulos quando toda a fonte tem o mesmo tamanho (2 contra 165 do docling no PDF SEI); avaliar `hdr_info`/TocHeaders ou heurística por negrito.
 - Testar se uma versão mais antiga do `onnxruntime` permite reativar o modo layout do pymupdf4llm (talvez como 3ª estratégia `pymupdf-layout`).
 - Silenciar o `DeprecationWarning` de `force_full_page_ocr` que o docling/pydantic emite nos testes.
 
@@ -73,3 +75,9 @@ Entradas mais recentes no fim.
 - Correção F3.1: a 1ª execução real mostrou score 47 (Baixa) em `misto.pdf` — a remoção de cabeçalho/rodapé por repetição no documento inteiro apagava parágrafos repetidos e títulos "Seção N". Agora as estratégias inserem `PAGE_BREAK` (`page_chunks=True` no pymupdf4llm, `page_break_placeholder` no docling) e só as 2 primeiras/últimas linhas de cada página, repetidas em ≥ 75% das páginas, são removidas (títulos/tabelas/imagens nunca). Score passou a 95.7.
 - Verificação: `pytest` 45 passed (~50 s com docling); `pdf2md convert tests/fixtures -o output` OK.
 - Atenção próximo agente: diferença residual em `manual-tecnico-acme` é real — pymupdf4llm move a última linha do parágrafo para dentro da tabela (`|tokens.|Col2|Col3|`).
+
+### 2026-11-03 — F6.2 — Claude Code
+- Feito: rodada 2 em PDF real (processo SEI, 80 págs) registrada em `docs/avaliacao.md`. Score 88,2 (Média); texto ~97% igual, diferença vem da segmentação. docling: 15× mais lento, 9% menos tokens, 165 títulos contra 2.
+- Correção F3.1: deduplicação de imagens quase idênticas (tamanho ±2 px e diferença média de pixel ≤ 2,5, na resolução nativa). Testei dHash antes e ele fundia QR codes distintos; descartado. Calibração documentada em `postprocess.py`.
+- Verificação: `pytest` 46 passed; conferência visual das imagens restantes (QR codes todos preservados).
+- Decisões: o PDF de teste fica na raiz e é ignorado pelo git (`/*.pdf` no `.gitignore`), pois pode conter dados internos.

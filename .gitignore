@@ -19,3 +19,4 @@ tests/fixtures/*.pdf
 .idea/
 .DS_Store
 Thumbs.db
+/*.pdf
