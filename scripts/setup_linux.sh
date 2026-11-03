@@ -16,14 +16,28 @@ if ! "$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then
     echo "Erro: é preciso Python >= 3.11 (encontrado: $("$PYTHON" --version 2>&1))." >&2
     exit 1
 fi
-if ! "$PYTHON" -c 'import venv, ensurepip' 2>/dev/null; then
+if ! "$PYTHON" -c 'import venv' 2>/dev/null; then
     echo "Erro: módulo venv ausente. No Ubuntu/Debian: sudo apt install python3-venv" >&2
     exit 1
 fi
 
-"$PYTHON" -m venv .venv
-# shellcheck disable=SC1091
-source .venv/bin/activate
+if "$PYTHON" -c 'import ensurepip' 2>/dev/null; then
+    "$PYTHON" -m venv .venv
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+else
+    # Ubuntu/Debian sem o pacote python3-venv: cria o venv sem pip e instala o pip pelo
+    # bootstrap oficial da PyPA. Alternativa com sudo: apt install python3-venv
+    echo "Aviso: ensurepip ausente; instalando pip via https://bootstrap.pypa.io/get-pip.py"
+    "$PYTHON" -m venv --without-pip .venv
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+    if command -v curl >/dev/null; then
+        curl -fsSL https://bootstrap.pypa.io/get-pip.py | python -
+    else
+        wget -qO- https://bootstrap.pypa.io/get-pip.py | python -
+    fi
+fi
 python -m pip install --upgrade pip
 
 if [ "$WITH_DOCLING" = "1" ]; then

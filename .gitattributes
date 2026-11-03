@@ -1,0 +1,2 @@
+# scripts de shell precisam de LF para rodar no Linux, mesmo se commitados do Windows
+*.sh text eol=lf
