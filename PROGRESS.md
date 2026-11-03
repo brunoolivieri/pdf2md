@@ -7,11 +7,11 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 
 | Passo | Descrição | Depende de | Status | Agente | Data |
 |-------|-----------|------------|--------|--------|------|
-| F0.1 | Scaffolding (pyproject, uv, ruff, pytest, CLI vazia) | — | pendente | | |
-| F0.2 | Fixtures PDF sintéticos | F0.1 | pendente | | |
-| F1.1 | Models + Strategy Protocol | F0.1 | pendente | | |
-| F1.2 | Naming (título, slug, colisão) | F0.2 | pendente | | |
-| F1.3 | Writer + contagem de tokens | F1.1 | pendente | | |
+| F0.1 | Scaffolding (pyproject, uv, ruff, pytest, CLI vazia) | — | concluído | Claude Code | 2026-11-03 |
+| F0.2 | Fixtures PDF sintéticos | F0.1 | concluído | Claude Code | 2026-11-03 |
+| F1.1 | Models + Strategy Protocol | F0.1 | concluído | Claude Code | 2026-11-03 |
+| F1.2 | Naming (título, slug, colisão) | F0.2 | concluído | Claude Code | 2026-11-03 |
+| F1.3 | Writer + contagem de tokens | F1.1 | concluído | Claude Code | 2026-11-03 |
 | F2.1 | Estratégia A — pymupdf4llm | F1.2, F1.3 | pendente | | |
 | F2.2 | Estratégia B — docling | F1.2, F1.3 | pendente | | |
 | F3.1 | Pós-processamento para LLM | F2.1 | pendente | | |
@@ -38,3 +38,14 @@ Entradas mais recentes no fim.
   Pastas de saída irmãs `<titulo>__pymupdf` e `<titulo>__docling`; comparação em `output/_comparacao/`.
 - Atenção próximo agente: `docling` baixa modelos no primeiro uso (~centenas de MB); mantê-lo como extra opcional.
 - Próximo passo sugerido: F0.1
+
+### 2026-11-03 — F0.1, F0.2 — Claude Code
+- Feito: `pyproject.toml` (hatchling, extras `docling`/`dev`), CLI vazia, `tests/fixtures/make_fixtures.py` (4 PDFs) + fixture `pdfs` no conftest.
+- Verificação: `pytest` 2 passed.
+- Decisões: venv usa o Python 3.12 do Anaconda (`.python-version`); o download de Python pelo uv falhou nesta máquina.
+- Atenção próximo agente: `uv` foi instalado em `%APPDATA%\Python\Python312\Scripts` (fora do PATH). Use `uv run --no-sync ...` depois de `uv sync --extra dev --extra docling`, senão `uv run` remove o extra docling.
+
+### 2026-11-03 — F1.1, F1.2, F1.3 — Claude Code
+- Feito: `models.py`, `strategies/base.py` + registro `get_strategy`, `naming.py` (título/slug/colisão/sha256), `writer.py`, `tokens.py`.
+- Verificação: testes `test_models`, `test_naming`, `test_writer` passando.
+- Decisões: contagem de tabelas/imagens/títulos é feita sobre o markdown final (`writer.count_structure`), igual para as duas estratégias. `tiktoken` baixa o encoding no 1º uso; sem rede, cai para estimativa chars/4 (registrado em `tokens_method`).
