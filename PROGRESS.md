@@ -20,8 +20,8 @@ Regras de atualização em [AGENTS.md](AGENTS.md). Detalhes de cada passo em [PL
 | F4.2 | Relatórios de comparação (MD/JSON/CSV) | F4.1 | concluído | Claude Code | 2026-11-03 |
 | F5.1 | CLI convert/compare | F2.*, F3.*, F4.* | concluído | Claude Code | 2026-11-03 |
 | F5.2 | Teste end-to-end | F5.1 | concluído | Claude Code | 2026-11-03 |
-| F6.1 | README final | F5.2 | pendente | | |
-| F6.2 | Avaliação em PDFs reais | F5.2 | pendente | | |
+| F6.1 | README final | F5.2 | concluído | Claude Code | 2026-11-03 |
+| F6.2 | Avaliação em PDFs reais | F5.2 | bloqueado | Claude Code | 2026-11-03 |
 
 ## Pendências / ideias fora de escopo
 
