@@ -5,6 +5,7 @@ description = "Conversor de PDF para Markdown otimizado para LLMs, com duas estr
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=1.26",
     "pymupdf>=1.24",
     "pymupdf4llm>=0.0.17",
     "rapidfuzz>=3.9",

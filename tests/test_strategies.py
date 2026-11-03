@@ -38,6 +38,14 @@ def test_pages_and_text(strategy, pdfs, tmp_path):
     assert "Seção 3" in result.markdown
 
 
+def test_progress_reaches_total(strategy, pdfs, tmp_path):
+    calls = []
+    get_strategy(strategy).convert(
+        pdfs["misto.pdf"], tmp_path / "images", lambda done, total: calls.append((done, total))
+    )
+    assert calls and calls[-1] == (3, 3)
+
+
 def test_unknown_strategy():
     with pytest.raises(ValueError):
         get_strategy("nao-existe")

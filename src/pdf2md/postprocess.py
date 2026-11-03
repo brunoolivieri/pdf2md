@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import hashlib
 import math
 import re
 from collections import Counter
-from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pymupdf
 
 from pdf2md.models import PAGE_BREAK
 
 MIN_IMAGE_PX = 32
-# Quase-duplicatas. Calibrado num PDF real (SEI, 80 págs, logos + QR codes): cópias do mesmo
-# logo ficaram com diferença média 0–2 (escala 0–255); QR codes distintos, sempre ≥ 10.
+# Mesma figura = tamanho ±8 px e, com deslocamento de até 4 px, diferença média de pixel ≤ 9
+# (escala 0–255). Calibrado num PDF real (SEI, 80 págs, brasão/selo/logo + ~25 QR codes):
+# cópias da mesma figura ficaram em ≤ 7,8; figuras distintas (inclusive QR codes) em ≥ 10,8.
 # Hashes perceptuais (dHash) não separam QR codes distintos e foram descartados.
-SIZE_TOLERANCE = 2
-MAX_PIXEL_DIFF = 2.5
+SIZE_TOLERANCE = 8
+SHIFT_PX = 4
+MAX_PIXEL_DIFF = 9.0
+REPEAT_LIMIT = 3  # figura com 3+ ocorrências no documento é decorativa e é removida
 MAX_HEADER_LEN = 120
 EDGE_LINES = 2
 REPEAT_RATIO = 0.75
@@ -61,35 +63,8 @@ def _strip_emphasis(text: str) -> str:
 # --- imagens -------------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class _Gray:
-    """Imagem em tons de cinza na resolução nativa."""
-
-    width: int
-    height: int
-    stride: int
-    samples: bytes
-
-    def same_picture(self, other: _Gray) -> bool:
-        """Mesmo tamanho (±SIZE_TOLERANCE px) e diferença média de pixel ≤ MAX_PIXEL_DIFF.
-
-        Pega a mesma figura gravada com bytes diferentes (recompressão, recorte de 1–2 px), mas
-        nunca confunde figuras distintas, mesmo parecidas (QR codes de assinaturas diferentes).
-        """
-        if abs(self.width - other.width) > SIZE_TOLERANCE:
-            return False
-        if abs(self.height - other.height) > SIZE_TOLERANCE:
-            return False
-        w, h = min(self.width, other.width), min(self.height, other.height)
-        total = 0
-        for y in range(h):
-            a = self.samples[y * self.stride : y * self.stride + w]
-            b = other.samples[y * other.stride : y * other.stride + w]
-            total += sum(abs(x - z) for x, z in zip(a, b, strict=True))
-        return total / (w * h) <= MAX_PIXEL_DIFF
-
-
-def _load_gray(path: Path) -> _Gray | None:
+def _load_gray(path: Path) -> np.ndarray | None:
+    """Imagem em tons de cinza (resolução nativa) como matriz int16, ou None se ilegível."""
     try:
         pix = pymupdf.Pixmap(str(path))
         if pix.alpha:
@@ -98,30 +73,75 @@ def _load_gray(path: Path) -> _Gray | None:
             pix = pymupdf.Pixmap(pymupdf.csGRAY, pix)
     except Exception:
         return None
-    return _Gray(pix.width, pix.height, pix.stride, bytes(pix.samples))
+    rows = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.stride)
+    return rows[:, : pix.width].astype(np.int16)
 
 
-def process_images(markdown: str, images_dir: Path) -> str:
-    """Remove base64, links quebrados, imagens minúsculas e quase duplicadas; renomeia `img-NNN`."""
+def same_picture(a: np.ndarray, b: np.ndarray) -> bool:
+    """Mesma figura, tolerando recorte deslocado em até SHIFT_PX e tamanho ±SIZE_TOLERANCE px.
+
+    Usa a menor diferença média de pixel entre os deslocamentos testados.
+    """
+    if (
+        abs(a.shape[0] - b.shape[0]) > SIZE_TOLERANCE
+        or abs(a.shape[1] - b.shape[1]) > SIZE_TOLERANCE
+    ):
+        return False
+    for dy in range(-SHIFT_PX, SHIFT_PX + 1):
+        for dx in range(-SHIFT_PX, SHIFT_PX + 1):
+            ya, yb, xa, xb = max(0, dy), max(0, -dy), max(0, dx), max(0, -dx)
+            h = min(a.shape[0] - ya, b.shape[0] - yb)
+            w = min(a.shape[1] - xa, b.shape[1] - xb)
+            if h < MIN_IMAGE_PX or w < MIN_IMAGE_PX:
+                continue
+            diff = np.abs(a[ya : ya + h, xa : xa + w] - b[yb : yb + h, xb : xb + w]).mean()
+            if diff <= MAX_PIXEL_DIFF:
+                return True
+    return False
+
+
+def process_images(markdown: str, images_dir: Path, repeat_limit: int = REPEAT_LIMIT) -> str:
+    """Limpa as imagens do markdown e da pasta `images_dir`.
+
+    - remove base64, links quebrados e imagens minúsculas;
+    - agrupa cópias da mesma figura (`same_picture`); figura que aparece `repeat_limit` vezes ou
+      mais é decorativa (brasão, selo de assinatura, logo de cabeçalho) e sai por inteiro;
+      as demais ficam só na primeira ocorrência (`repeat_limit=0` desliga a remoção);
+    - renomeia as restantes para `img-NNN`.
+    """
     markdown = BASE64_IMAGE.sub("", markdown)
     folder = images_dir.parent
-    seen: set[str] = set()  # sha256 das imagens mantidas
-    kept: list[_Gray] = []
+
+    groups: list[tuple[np.ndarray, list[Path]]] = []  # (representante, arquivos)
+    group_of: dict[Path, int] = {}
+    occurrences: Counter[int] = Counter()
+    for m in IMAGE_LINK.finditer(markdown):
+        path = folder / m.group(2)
+        if path not in group_of and path.is_file():
+            img = _load_gray(path)
+            if img is None or min(img.shape) < MIN_IMAGE_PX:
+                continue
+            idx = next((i for i, (rep, _) in enumerate(groups) if same_picture(rep, img)), None)
+            if idx is None:
+                idx = len(groups)
+                groups.append((img, []))
+            groups[idx][1].append(path)
+            group_of[path] = idx
+        if path in group_of:
+            occurrences[group_of[path]] += 1
+
     renames: dict[Path, str] = {}
+    emitted: set[int] = set()
 
     def replace(m: re.Match[str]) -> str:
         path = folder / m.group(2)
-        if path in renames or not path.is_file():  # repetida ou inexistente
+        idx = group_of.get(path)
+        if idx is None or idx in emitted:  # inválida ou cópia já incluída
             return ""
-        img = _load_gray(path)
-        if img is None or img.width < MIN_IMAGE_PX or img.height < MIN_IMAGE_PX:
+        if repeat_limit and occurrences[idx] >= repeat_limit:  # decorativa
             return ""
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest in seen or any(img.same_picture(other) for other in kept):
-            return ""
-        seen.add(digest)
-        kept.append(img)
-        new_name = f"img-{len(kept):03d}{path.suffix.lower()}"
+        emitted.add(idx)
+        new_name = f"img-{len(renames) + 1:03d}{path.suffix.lower()}"
         renames[path] = new_name
         return f"![{m.group(1).strip()}]({images_dir.name}/{new_name})"
 
@@ -280,11 +300,11 @@ def clean_text(markdown: str) -> str:
     return text + "\n"
 
 
-def postprocess(markdown: str, images_dir: Path) -> str:
+def postprocess(markdown: str, images_dir: Path, repeat_limit: int = REPEAT_LIMIT) -> str:
     """Aplica todas as regras; altera arquivos em `images_dir` (remove/renomeia).
 
     As estratégias separam páginas com `PAGE_BREAK`; o marcador não chega à saída final.
     """
-    markdown = process_images(markdown.replace("\r\n", "\n"), images_dir)
+    markdown = process_images(markdown.replace("\r\n", "\n"), images_dir, repeat_limit)
     pages = remove_page_artifacts(markdown.split(PAGE_BREAK))
     return clean_text(join_pages(pages))

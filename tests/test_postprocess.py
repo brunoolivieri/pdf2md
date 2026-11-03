@@ -117,17 +117,43 @@ def _qr_like(seed, size=120, module=6):
             for y in range(size)]  # fmt: skip
 
 
+def _shifted_copy(rows, dx):
+    """Mesma figura recortada `dx` px deslocada, 1 px mais larga e com leve ruído."""
+    return [[max(0, v - 2) for v in [255] * dx + row[: len(row) - dx]] + [255] for row in rows]
+
+
 def test_process_images_near_duplicates(tmp_path):
     images = tmp_path / "images"
     images.mkdir()
     logo = _qr_like(1)
-    copy = [[max(0, v - 2) for v in row] + [255] for row in logo]  # +1 px e leve ruído
     _gray_png(images / "logo1.png", logo)
-    _gray_png(images / "logo2.png", copy)
+    _gray_png(images / "logo2.png", _shifted_copy(logo, 3))
     _gray_png(images / "outro.png", _qr_like(2))  # mesmos cantos, miolo diferente
     md = "![](images/logo1.png)\n![](images/logo2.png)\n![](images/outro.png)\n"
     out = process_images(md, images)
     assert out.split() == ["![](images/img-001.png)", "![](images/img-002.png)"]
+
+
+def test_process_images_drops_repeated_figures(tmp_path):
+    images = tmp_path / "images"
+    images.mkdir()
+    selo = _qr_like(7)
+    for n in range(3):  # selo em 3 assinaturas, cada recorte um pouco diferente
+        _gray_png(images / f"selo{n}.png", _shifted_copy(selo, n) if n else selo)
+    for n in range(3):  # 3 QR codes distintos
+        _gray_png(images / f"qr{n}.png", _qr_like(100 + n))
+    md = "\n".join(f"![](images/selo{n}.png)\n![](images/qr{n}.png)" for n in range(3))
+    out = process_images(md, images)
+    assert out.split() == [f"![](images/img-00{n}.png)" for n in (1, 2, 3)]
+    assert sorted(p.name for p in images.iterdir()) == ["img-001.png", "img-002.png", "img-003.png"]
+
+    # com o limite desligado, o selo fica (uma vez só)
+    images2 = tmp_path / "b" / "images"
+    images2.mkdir(parents=True)
+    for n in range(3):
+        _gray_png(images2 / f"selo{n}.png", _shifted_copy(selo, n) if n else selo)
+    md2 = "\n".join(f"![](images/selo{n}.png)" for n in range(3))
+    assert process_images(md2, images2, repeat_limit=0).split() == ["![](images/img-001.png)"]
 
 
 def test_misto_without_headers_footers(pdfs, tmp_path):

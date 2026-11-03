@@ -10,6 +10,7 @@ import pymupdf
 import pymupdf4llm
 
 from pdf2md.models import PAGE_BREAK, ConversionResult
+from pdf2md.strategies.base import ProgressFn
 
 # O modo "layout" do pymupdf4llm >= 1.x depende de onnxruntime, que trava (segfault) em
 # alguns ambientes Windows/Anaconda; além disso queremos uma estratégia puramente
@@ -17,6 +18,7 @@ from pdf2md.models import PAGE_BREAK, ConversionResult
 pymupdf4llm.use_layout(False)
 
 _IMAGE_TARGET = re.compile(r"(!\[[^\]]*\]\()([^)]+)(\))")
+PAGES_PER_BATCH = 10  # granularidade do progresso
 
 
 class PyMuPDFStrategy:
@@ -33,23 +35,34 @@ class PyMuPDFStrategy:
     def options(self) -> dict[str, Any]:
         return {"table_strategy": self.table_strategy, "dpi": self.dpi, "layout": False}
 
-    def convert(self, pdf: Path, images_dir: Path) -> ConversionResult:
+    def convert(
+        self, pdf: Path, images_dir: Path, progress: ProgressFn | None = None
+    ) -> ConversionResult:
         images_dir.mkdir(parents=True, exist_ok=True)
+        texts: list[str] = []
         with pymupdf.open(pdf) as doc:
-            chunks = pymupdf4llm.to_markdown(
-                doc,
-                write_images=True,
-                image_path=str(images_dir),
-                image_format="png",
-                dpi=self.dpi,
-                table_strategy=self.table_strategy,
-                page_chunks=True,
-                show_progress=False,
-            )
-            pages = doc.page_count
-        markdown = f"\n\n{PAGE_BREAK}\n\n".join(chunk["text"] for chunk in chunks)
+            total = doc.page_count
+            # níveis de título calculados uma vez para o documento todo, não por lote
+            headers = pymupdf4llm.IdentifyHeaders(doc)
+            for start in range(0, total, PAGES_PER_BATCH):
+                chunks = pymupdf4llm.to_markdown(
+                    doc,
+                    pages=list(range(start, min(total, start + PAGES_PER_BATCH))),
+                    hdr_info=headers,
+                    write_images=True,
+                    image_path=str(images_dir),
+                    image_format="png",
+                    dpi=self.dpi,
+                    table_strategy=self.table_strategy,
+                    page_chunks=True,
+                    show_progress=False,
+                )
+                texts.extend(chunk["text"] for chunk in chunks)
+                if progress:
+                    progress(len(texts), total)
+        markdown = f"\n\n{PAGE_BREAK}\n\n".join(texts)
         return ConversionResult(
-            markdown=_relative_image_links(markdown), pages=pages, images_dir=images_dir
+            markdown=_relative_image_links(markdown), pages=total, images_dir=images_dir
         )
 
 
