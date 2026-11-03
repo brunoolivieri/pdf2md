@@ -155,8 +155,9 @@ class Tracker:
         _report(outcome, self.progress.console)
 
     def step(self, description: str) -> None:
-        """Etapa sem contagem de páginas (ex.: comparação): barra indeterminada."""
-        self.progress.reset(self.current, total=None, description=description, visible=True)
+        """Etapa sem contagem de páginas (ex.: comparação): aparece na própria barra Total."""
+        self.progress.update(self.current, visible=False)
+        self.progress.update(self.total, description=f"[bold]Total[/] · {description}")
 
     def advance(self, units: int = 1) -> None:
         self.progress.advance(self.total, units)

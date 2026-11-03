@@ -11,28 +11,64 @@ Nenhuma etapa chama APIs de LLM: o custo está só nos tokens que você enviar d
 | `pymupdf` | [pymupdf4llm](https://pypi.org/project/pymupdf4llm/) (modo legado, heurístico) | ~0,05 s/página, sem GPU nem modelos |
 | `docling` | [docling](https://pypi.org/project/docling/) | modelos de layout + TableFormer; mais lento, melhor em layouts e tabelas complexas; OCR opcional |
 
-## Instalação
+## Instalação no Linux (venv + pip)
 
-Requer Python ≥ 3.11 e [uv](https://docs.astral.sh/uv/).
+Requer Python ≥ 3.11 (`python3 --version`).
 
 ```bash
-uv sync --extra dev                  # só a estratégia pymupdf
-uv sync --extra dev --extra docling  # as duas (instala torch; ~2 GB)
+git clone <url-do-repo> pdf2md && cd pdf2md
+./scripts/setup_linux.sh          # cria .venv e instala tudo (torch só CPU, ~1 GB)
+source .venv/bin/activate
+pdf2md --help
 ```
 
-O docling baixa seus modelos do HuggingFace na primeira execução (centenas de MB, uma vez só).
+Variações do script:
+
+```bash
+WITH_DOCLING=0 ./scripts/setup_linux.sh    # só a estratégia pymupdf: leve, sem torch
+PYTHON=python3.12 ./scripts/setup_linux.sh # escolhe o interpretador
+TORCH_INDEX=https://download.pytorch.org/whl/cu124 ./scripts/setup_linux.sh  # GPU NVIDIA
+```
+
+O que o script faz, se preferir à mão:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -e ".[dev,docling]"
+```
+
+No Ubuntu/Debian sem o pacote `python3-venv` (erro de `ensurepip`), o script cria o venv sem
+pip e instala o pip pelo `get-pip.py` oficial; com sudo, prefira `sudo apt install python3-venv`.
+O docling baixa seus modelos do HuggingFace na primeira execução (centenas de MB, uma vez só,
+em `~/.cache/huggingface`).
+
+### Windows / uv
+
+```bash
+uv sync --extra dev --extra docling
+uv run pdf2md --help
+```
 
 ## Uso
 
+Com o venv ativo (`source .venv/bin/activate`), ou prefixando `uv run` se usar uv:
+
 ```bash
-uv run pdf2md convert samples/relatorio.pdf -o output   # um PDF, as duas estratégias + comparação
-uv run pdf2md convert samples/ -o output --workers 4    # pasta (recursiva); pymupdf em paralelo
-uv run pdf2md convert samples/ -s pymupdf               # só uma estratégia
-uv run pdf2md convert samples/ --ocr --force            # OCR no docling; ignora o cache
-uv run pdf2md compare output/x__pymupdf output/x__docling
+pdf2md convert samples/relatorio.pdf -o output   # um PDF, as duas estratégias + comparação
+pdf2md convert samples/ -o output --workers 4    # pasta (recursiva); pymupdf em paralelo
+pdf2md convert samples/ -s pymupdf               # só uma estratégia
+pdf2md convert samples/ --ocr --force            # OCR no docling; ignora o cache
+pdf2md convert samples/ --image-repeat-limit 0   # mantém logos/selos repetidos
+pdf2md compare output/x__pymupdf output/x__docling
 ```
 
-PDFs já convertidos (mesmo sha256) são pulados; use `--force` para refazer.
+Durante a execução aparecem uma barra **Total** (porcentagem de todo o trabalho, tempo decorrido
+e restante) e uma barra de páginas do documento atual. Ao final saem a tabela de conversões, as
+métricas e um quadro com o **grau de semelhança** de cada documento (e a média, num lote).
+
+PDFs já convertidos (mesmo sha256 e mesmas opções) são pulados; use `--force` para refazer.
 
 ## Saída
 
@@ -55,8 +91,12 @@ arquivo), convertido em slug, mais o sufixo da estratégia.
 
 ## O que é feito para economizar tokens
 
-- Imagens gravadas em arquivo e referenciadas por link (nunca base64); ícones < 32 px e
-  duplicatas descartados; nomes curtos `img-NNN`.
+- Imagens gravadas em arquivo e referenciadas por link (nunca base64); ícones < 32 px
+  descartados; nomes curtos `img-NNN`.
+- Figuras repetitivas removidas: a mesma figura (comparada pixel a pixel, tolerando recorte
+  deslocado) que aparece 3+ vezes no documento — brasão, selo "SEI assinatura eletrônica",
+  logo de cabeçalho — sai por inteiro; com 2 cópias, fica uma. QR codes distintos são mantidos.
+  Ajuste com `--image-repeat-limit N` (0 desliga).
 - Cabeçalhos, rodapés e números de página removidos (bordas de página repetidas em ≥ 75% das páginas).
 - Parágrafos reconstituídos (linhas quebradas unidas, hifenização desfeita), espaços colapsados.
 - Tabelas GFM compactas (`|a|b|`, sem preenchimento) e sem negrito redundante.

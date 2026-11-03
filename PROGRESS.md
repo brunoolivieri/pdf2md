@@ -81,3 +81,8 @@ Entradas mais recentes no fim.
 - Correção F3.1: deduplicação de imagens quase idênticas (tamanho ±2 px e diferença média de pixel ≤ 2,5, na resolução nativa). Testei dHash antes e ele fundia QR codes distintos; descartado. Calibração documentada em `postprocess.py`.
 - Verificação: `pytest` 46 passed; conferência visual das imagens restantes (QR codes todos preservados).
 - Decisões: o PDF de teste fica na raiz e é ignorado pelo git (`/*.pdf` no `.gitignore`), pois pode conter dados internos.
+
+### 2026-11-03 — Pós-plano: imagens repetitivas, progresso, Linux — Claude Code
+- Feito: (1) `postprocess.process_images` agrupa cópias da mesma figura (numpy, tolera recorte deslocado ±4 px e tamanho ±8 px, diferença média ≤ 9) e remove por inteiro figuras com ≥ `--image-repeat-limit` (padrão 3) ocorrências; cache agora considera as opções. (2) Estratégias aceitam `progress(done, total)`: docling via `progress_callback` nativo (`PageCompletedProgress`), pymupdf4llm em lotes de 10 páginas com `IdentifyHeaders` calculado uma vez. CLI com barra Total em %, barra de páginas por documento e painel final "Grau de semelhança". (3) `scripts/setup_linux.sh` (venv + pip, torch CPU; fallback get-pip.py se faltar `python3-venv`), `.gitattributes` com LF para `.sh`, README com instruções Linux.
+- Verificação: Windows `pytest` 49 passed; WSL Ubuntu 26.04 / Python 3.14: setup em 1m43 (venv 2,1 GB), `pytest` 49 passed, PDF SEI convertido (27/31 imagens, semelhança 88,1%).
+- Atenção próximo agente: um selo SEI em escala menor (57×84) que aparece 1 vez continua no docling — não é repetitivo pela contagem; pegar exigiria comparação entre escalas, com risco de fundir QR codes.

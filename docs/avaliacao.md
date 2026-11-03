@@ -59,8 +59,12 @@ Observações:
   eletrônica" (o docling recorta cada cópia com bytes diferentes). Testei hash perceptual (dHash)
   para colapsar quase-duplicatas, mas ele também fundia QR codes distintos. A regra adotada é
   conservadora: tamanho ±2 px e diferença média de pixel ≤ 2,5. Ela removeu as cópias exatas
-  (35→33 no pymupdf, 74→59 no docling) e preservou todos os QR codes. Restam algumas cópias de
-  logo recortadas com deslocamento.
+  (35→33 no pymupdf, 74→59 no docling) e preservou todos os QR codes.
+- **Imagens repetitivas (atualização)**: a comparação passou a tolerar recorte deslocado em até
+  4 px (cópias da mesma figura ≤ 7,8; figuras distintas ≥ 10,8; limite 9), e figuras com 3+
+  ocorrências passaram a ser removidas por inteiro. Resultado: 27 imagens no pymupdf e 31 no
+  docling, praticamente só os QR codes de assinatura, o gráfico e variantes únicas de logo
+  (ex.: um selo SEI em escala menor que aparece uma única vez).
 
 **Recomendação de uso**: pymupdf para triagem rápida e barata de lotes; docling quando a
 estrutura (títulos/seções) importa ou quando o score cair para Média/Baixa.
