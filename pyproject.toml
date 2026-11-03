@@ -1,0 +1,39 @@
+[project]
+name = "pdf2md"
+version = "0.1.0"
+description = "Conversor de PDF para Markdown otimizado para LLMs, com duas estratégias e comparação"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pymupdf>=1.24",
+    "pymupdf4llm>=0.0.17",
+    "rapidfuzz>=3.9",
+    "rich>=13.7",
+    "tiktoken>=0.7",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+docling = ["docling>=2.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+pdf2md = "pdf2md.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pdf2md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["docling: testes que exigem o extra docling"]
