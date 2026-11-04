@@ -44,12 +44,20 @@ pip e instala o pip pelo `get-pip.py` oficial; com sudo, prefira `sudo apt insta
 O docling baixa seus modelos do HuggingFace na primeira execução (centenas de MB, uma vez só,
 em `~/.cache/huggingface`).
 
-### Windows / uv
+### Windows
 
-```bash
-uv sync --extra dev --extra docling
-uv run pdf2md --help
+Dê dois cliques em `pdf2md.bat` ou rode no terminal:
+
+```bat
+pdf2md.bat                                  :: converte samples\ para output\
+pdf2md.bat convert C:\docs\arquivo.pdf -o output
+pdf2md.bat convert samples -s pymupdf --force
 ```
+
+Na primeira execução ele cria o ambiente em `.venv-win` (com o uv, se houver; senão com
+`venv` + `pip`, torch só CPU) usando um Python 3.11+ encontrado pelo lançador `py`.
+O Windows usa `.venv-win` e o Linux/WSL usa `.venv`: um mesmo venv não serve aos dois
+sistemas, e assim a pasta pode ser usada pelos dois lados.
 
 ## Uso
 

@@ -1,2 +1,4 @@
 # scripts de shell precisam de LF para rodar no Linux, mesmo se commitados do Windows
 *.sh text eol=lf
+# .bat com LF quebra rótulos/goto no cmd.exe
+*.bat text eol=crlf
